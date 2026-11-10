@@ -80,7 +80,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--sale); outl
 .pager { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
 .pager button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 700; }
 .pager button[aria-current="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; transition: transform .15s, box-shadow .15s; }
 .card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
