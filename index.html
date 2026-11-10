@@ -1,0 +1,989 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Щоденна гра: фейковий магазин, де за 6 хвилин треба знайти й урвати 10 схованих знижок.">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Знижкомат</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a deadpan marketplace — sticky header with HUD and category tabs, deal banners, product grid, cart drawer on the right */
+:root {
+  --bg: #F2F3F6;
+  --surface: #FFFFFF;
+  --fg: #16181D;
+  --muted: #5E6472;
+  --line: #E0E3EA;
+  --sale: #D42A3C;
+  --sale-ink: #FFFFFF;
+  --tag: #FFD84D;
+  --tag-ink: #1B1B1B;
+  --ok: #1E8A4B;
+  --tile-l: 91%;
+  --tile-s: 70%;
+  --shadow: 0 10px 30px rgba(20, 24, 33, .14);
+  --f-display: "Unbounded", "Manrope", system-ui, sans-serif;
+  --f-body: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101217; --surface: #1A1D24; --fg: #ECEEF2; --muted: #9AA1AE; --line: #2B303A;
+    --sale: #FF4D5F; --sale-ink: #FFFFFF; --tag: #F2C94C; --tag-ink: #1B1B1B; --ok: #4CC27F;
+    --tile-l: 24%; --tile-s: 35%; --shadow: 0 10px 30px rgba(0, 0, 0, .5); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101217; --surface: #1A1D24; --fg: #ECEEF2; --muted: #9AA1AE; --line: #2B303A;
+  --sale: #FF4D5F; --sale-ink: #FFFFFF; --tag: #F2C94C; --tag-ink: #1B1B1B; --ok: #4CC27F;
+  --tile-l: 24%; --tile-s: 35%; --shadow: 0 10px 30px rgba(0, 0, 0, .5); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--f-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--sale); outline-offset: 2px; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top-in, .tabs-wrap, .wrap, .banners { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1180px; margin: 0 auto; }
+.top-in { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 12px; flex-wrap: wrap; }
+.brand { font: 800 20px/1 var(--f-display); letter-spacing: -.02em; display: flex; align-items: baseline; gap: 10px; border: 0; background: none; padding: 0; user-select: none; }
+.brand-date { font: 500 12px/1 var(--f-mono); color: var(--muted); letter-spacing: 0; }
+.hud { display: flex; align-items: center; gap: 8px; }
+.chip { padding: 6px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.chip.urgent { background: var(--sale); color: var(--sale-ink); border-color: var(--sale); }
+.cart-btn { padding: 7px 12px; border-radius: 999px; border: 0; background: var(--fg); color: var(--bg); font-weight: 800; font-size: 13px; display: flex; gap: 6px; align-items: center; }
+.cart-btn span { background: var(--tag); color: var(--tag-ink); border-radius: 999px; min-width: 20px; padding: 0 6px; font-family: var(--f-mono); font-size: 12px; line-height: 20px; text-align: center; }
+.tabs-wrap { overflow-x: auto; scrollbar-width: none; }
+.tabs { display: flex; gap: 4px; padding-bottom: 8px; }
+.tab { border: 0; background: none; padding: 8px 12px; border-radius: 8px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.tab[aria-current="true"] { background: var(--bg); color: var(--fg); }
+.tab.blink { animation: blink .7s steps(2, start) infinite; }
+@keyframes blink { 50% { background: var(--sale); color: var(--sale-ink); } }
+
+.banners { display: flex; flex-direction: column; gap: 8px; padding-block: 12px 0; }
+.banners:empty { display: none; }
+.banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 10px; background: var(--tag); color: var(--tag-ink); font-weight: 700; font-size: 14px; flex-wrap: wrap; }
+.banner .mono { font-weight: 800; }
+.banner button { border: 0; border-radius: 8px; padding: 6px 12px; background: var(--tag-ink); color: var(--tag); font-weight: 800; }
+
+.wrap { padding-block: 20px 60px; }
+.cat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.cat-head h1 { font: 600 22px/1.2 var(--f-display); margin: 0; text-wrap: balance; }
+.pager { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
+.pager button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 700; }
+.pager button[aria-current="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; transition: transform .15s, box-shadow .15s; }
+.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.card.hot { border-color: var(--sale); }
+.card.sold { opacity: .55; }
+.tile { position: relative; aspect-ratio: 4 / 3; max-width: 100%; display: grid; place-items: center; background: hsl(var(--h) var(--tile-s) var(--tile-l)); }
+.emo { font-size: 64px; line-height: 1; }
+.tile .pic { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.badge-slot { position: absolute; top: 10px; left: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.badge { display: inline-block; padding: 4px 8px; border-radius: 6px; background: var(--sale); color: var(--sale-ink); font: 700 12px/1.2 var(--f-mono); font-variant-numeric: tabular-nums; }
+.badge.mine { background: var(--ok); }
+.sticker { display: inline-block; padding: 1px 5px; border-radius: 4px; background: var(--tag); color: var(--tag-ink); font: 700 10px/1.4 var(--f-mono); transform: rotate(-4deg); }
+.card-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+.card-body h3 { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.3; }
+.price { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.price b { font-size: 18px; }
+.price s { color: var(--muted); font-size: 13px; }
+.price.sale b { color: var(--sale); }
+.price.mine b { color: var(--ok); }
+.add { margin-top: auto; border: 0; border-radius: 8px; padding: 9px 12px; background: var(--tag); color: var(--tag-ink); font-weight: 800; }
+.add[disabled] { background: var(--bg); color: var(--muted); cursor: default; }
+.add.big { padding: 12px 16px; font-size: 15px; width: 100%; }
+
+.overlay { position: fixed; inset: 0; z-index: 20; background: rgba(10, 12, 16, .55); display: grid; place-items: center; padding: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.sheet { position: relative; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); width: 100%; max-width: 640px; max-height: calc(100% - 32px); overflow-y: auto; }
+.x { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 999px; border: 0; background: var(--bg); font-size: 20px; line-height: 1; z-index: 1; }
+.product { display: grid; grid-template-columns: 1fr 1.2fr; }
+.p-tile { display: grid; place-items: center; background: hsl(var(--h) var(--tile-s) var(--tile-l)); min-height: 240px; }
+.p-tile .emo { font-size: 110px; }
+.p-tile { position: relative; overflow: hidden; }
+.p-tile .pic { position: relative; width: 100%; aspect-ratio: 1; object-fit: cover; }
+.p-tile .pic-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(24px) saturate(1.1); transform: scale(1.2); }
+.p-info { padding: 24px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.p-cat { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.p-info h2 { font: 600 20px/1.25 var(--f-display); margin: 0; text-wrap: balance; padding-right: 36px; }
+#pPrice { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.p-info .price b { font-size: 26px; }
+.p-desc { margin: 0; color: var(--muted); }
+.p-info h3 { margin: 8px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.reviews { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.reviews li { border-top: 1px solid var(--line); padding-top: 10px; font-size: 13px; }
+.reviews .who { font-weight: 700; display: flex; gap: 8px; align-items: center; }
+.stars { color: #E2A100; letter-spacing: 1px; font-size: 12px; }
+.reviews p { margin: 4px 0 0; }
+.reviews .replies { list-style: none; margin: 8px 0 0 12px; padding: 0 0 0 10px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.reviews .replies li { border-top: 0; padding-top: 0; }
+
+.drawer { position: fixed; z-index: 15; top: 0; right: 0; bottom: 0; width: min(400px, 100%); background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.drawer-head h2 { font: 600 18px/1 var(--f-display); margin: 0; }
+.drawer-head .x { position: static; }
+.cart-list { list-style: none; margin: 0; padding: 8px 20px; overflow-y: auto; flex: 1; }
+.cart-list li { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.cart-list .ce { font-size: 28px; text-align: center; }
+.cart-list .cn { font-weight: 700; font-size: 14px; line-height: 1.3; min-width: 0; }
+.cart-list .cn small { display: block; font-weight: 600; color: var(--ok); }
+.cart-list .cp { text-align: right; font-family: var(--f-mono); font-size: 13px; }
+.cart-list .cp s { display: block; color: var(--muted); }
+.cart-list .rm { border: 0; background: none; color: var(--muted); font-size: 12px; padding: 0; text-decoration: underline; }
+.cart-list .empty { display: block; border: 0; color: var(--muted); padding: 24px 0; text-align: center; }
+.promo { padding: 12px 20px; border-top: 1px solid var(--line); }
+.promo label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.promo-row { display: flex; gap: 8px; margin-top: 6px; }
+.promo-row input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 600 14px var(--f-mono); text-transform: uppercase; }
+.promo-row button { border: 1px solid var(--fg); background: none; border-radius: 8px; padding: 0 12px; font-weight: 700; }
+.promo-msg { margin: 6px 0 0; font-size: 13px; min-height: 1.5em; color: var(--muted); }
+.promo-msg.good { color: var(--ok); }
+.promo-msg.bad { color: var(--sale); }
+.totals { padding: 12px 20px; border-top: 1px solid var(--line); display: grid; gap: 4px; font-size: 14px; }
+.totals div { display: flex; justify-content: space-between; }
+.totals .saved { font-weight: 800; color: var(--ok); }
+.drawer > .add { margin: 0 20px 16px; width: auto; }
+
+.intro { padding: 32px; display: flex; flex-direction: column; gap: 14px; max-width: 540px; }
+.intro .eyebrow { font: 500 12px var(--f-mono); color: var(--muted); }
+.intro h2 { font: 800 30px/1.1 var(--f-display); margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+.intro h3 { margin: 8px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.intro p { margin: 0; }
+.intro .rules { color: var(--muted); }
+.intro .meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.squares { font-size: 24px; letter-spacing: 2px; line-height: 1.2; word-break: break-all; }
+.big-score { font: 800 44px/1 var(--f-display); }
+.share { white-space: pre-wrap; font: 13px/1.5 var(--f-mono); background: var(--bg); border-radius: 8px; padding: 12px; margin: 0; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ghost { border: 1px solid var(--line); background: none; border-radius: 8px; padding: 12px 16px; font-weight: 700; flex: 1; }
+.where { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.where li { display: grid; grid-template-columns: 22px 1fr; gap: 6px; }
+.where li.miss { color: var(--muted); }
+.where li.caught { color: var(--sale); }
+
+.toast { position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: 14px; box-shadow: var(--shadow); max-width: calc(100% - 32px); text-align: center; }
+.toast.win { background: var(--ok); color: #fff; }
+
+@media (max-width: 640px) {
+  .product { grid-template-columns: 1fr; }
+  .p-tile { min-height: 180px; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .emo { font-size: 48px; }
+  .card-body { padding: 10px; }
+  .card-body h3 { font-size: 13px; }
+  .price b { font-size: 15px; }
+  .intro { padding: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card, .card:hover { transition: none; transform: none; }
+  .tab.blink { animation: none; background: var(--sale); color: var(--sale-ink); }
+}
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <button class="brand" id="brand" type="button">Знижкомат <span class="brand-date" id="dateLabel"></span></button>
+    <div class="hud">
+      <span class="chip" id="score"></span>
+      <span class="chip mono" id="timer"></span>
+      <button class="cart-btn" id="cartBtn" type="button">Кошик <span id="cartCount">0</span></button>
+    </div>
+  </div>
+  <nav class="tabs-wrap" aria-label="Категорії"><div class="tabs" id="tabs"></div></nav>
+</header>
+
+<div class="banners" id="banners"></div>
+
+<main class="wrap">
+  <div class="cat-head"><h1 id="catTitle"></h1><div class="pager" id="pager"></div></div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<aside class="drawer" id="drawer" hidden aria-label="Кошик">
+  <div class="drawer-head"><h2>Кошик</h2><button class="x" id="cartClose" type="button" aria-label="Закрити">×</button></div>
+  <ul class="cart-list" id="cartList"></ul>
+  <form class="promo" id="promoForm">
+    <label for="promo">Промокод</label>
+    <div class="promo-row"><input id="promo" autocomplete="off" spellcheck="false"><button type="submit">Застосувати</button></div>
+    <p class="promo-msg" id="promoMsg"></p>
+  </form>
+  <div class="totals" id="totals"></div>
+  <button class="add big" id="checkout" type="button">Оформити й завершити</button>
+</aside>
+
+<div class="overlay" id="productOv" hidden>
+  <div class="sheet product" role="dialog" aria-modal="true" aria-labelledby="pName">
+    <button class="x" data-close type="button" aria-label="Закрити">×</button>
+    <div class="p-tile" id="pTile"></div>
+    <div class="p-info">
+      <div class="p-cat" id="pCat"></div>
+      <h2 id="pName"></h2>
+      <div id="pPrice"></div>
+      <p class="p-desc" id="pDesc"></p>
+      <button class="add big" id="pAdd" type="button">В кошик</button>
+      <h3>Відгуки</h3>
+      <ul class="reviews" id="pReviews"></ul>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="startOv">
+  <div class="sheet intro" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+    <span class="eyebrow" id="startEyebrow"></span>
+    <h2 id="startTitle"></h2>
+    <p>Ніхто їх не показує. Одні спалахують на пів хвилини, інші ховаються глибше в каталозі, ще інші написані дрібним шрифтом. Щодня набір хитрощів інший.</p>
+    <p class="rules">Встиг додати товар у кошик, поки знижка діє, і вона твоя. Але обережно: бейджі бувають і фальшиві. Магазин однаковий для всіх, тож результат можна порівняти з друзями.</p>
+    <div class="meta"><span class="chip">6 хвилин</span><span class="chip">гроші не потрібні</span><span class="chip">завтра новий магазин</span></div>
+    <button class="add big" id="startBtn" type="button">Почати</button>
+    <p class="rules" style="font-size:12px">Ми рахуємо лише анонімну кількість забігів, без кукі й без даних про тебе.</p>
+  </div>
+</div>
+
+<div class="overlay" id="endOv" hidden>
+  <div class="sheet intro" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+    <span class="eyebrow" id="endEyebrow"></span>
+    <h2 id="endTitle">Магазин зачинено</h2>
+    <div class="big-score" id="endScore"></div>
+    <div class="squares" id="endSquares" aria-hidden="true"></div>
+    <p id="endSaved"></p>
+    <pre class="share" id="shareText"></pre>
+    <div class="row"><button class="add big" id="copyBtn" type="button">Скопіювати для друзів</button></div>
+    <h3>Де були знижки</h3>
+    <ul class="where" id="whereList"></ul>
+    <div class="row">
+      <button class="ghost" id="lookBtn" type="button">Подивитись магазин</button>
+      <button class="ghost" id="practiceBtn" type="button">Ще раз, не в залік</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const RUN = 360;
+const PAGE = 4;
+const TOTAL = 10;
+const DEAL_MIN = 1500;
+
+const now = new Date();
+const pad = n => String(n).padStart(2, '0');
+const dateKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+const dateLabel = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}`;
+
+function seedFrom(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(seedFrom('znyzhkomat:' + dateKey));
+const ri = (a, b) => a + Math.floor(rng() * (b - a + 1));
+const pickOne = arr => arr[Math.floor(rng() * arr.length)];
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+const PEOPLE = [
+  { name: 'Оксана', lat: 'OKSANA', g: 'f' }, { name: 'Андрій', lat: 'ANDRII', g: 'm' },
+  { name: 'Ірина', lat: 'IRYNA', g: 'f' }, { name: 'Тарас', lat: 'TARAS', g: 'm' },
+  { name: 'Марта', lat: 'MARTA', g: 'f' }, { name: 'Богдан', lat: 'BOHDAN', g: 'm' },
+  { name: 'Олена', lat: 'OLENA', g: 'f' }, { name: 'Дмитро', lat: 'DMYTRO', g: 'm' },
+  { name: 'Соломія', lat: 'SOLOMIIA', g: 'f' }, { name: 'Ярослав', lat: 'YAROSLAV', g: 'm' },
+  { name: 'Катерина', lat: 'KATERYNA', g: 'f' }, { name: 'Максим', lat: 'MAKSYM', g: 'm' },
+];
+// A review written in a gendered voice must get an author of that gender.
+const she = text => ({ g: 'f', text });
+const he = text => ({ g: 'm', text });
+const author = g => pickOne(PEOPLE.filter(x => !g || x.g === g));
+
+// Gender-neutral filler reviews; each product gets a few of these per day.
+const GENERIC = [
+  'Прийшло за два дні. Коробка гарна, вміст теж.',
+  'Опис збігається з товаром. Рідкість.',
+  'Беру вже втретє. Для чого — поки не з’ясовано.',
+  'Подарунок колезі. Колега мовчить, але користується.',
+  'Пакування таке, що шкода відкривати. Тому не відкриваю.',
+  'Чотири зірки, бо п’ята в мене для особливих випадків.',
+  'Якість на висоті. Висота — 12 см.',
+  'Кур’єр теж зацікавився. Довелося дати посилання.',
+  'Інструкція трьома мовами. Жодна не допомогла, але читати цікаво.',
+  'Сусіди заздрять. Причину не пояснюю.',
+  'Працює рівно так, як обіцяли. Трохи навіть лячно.',
+  'Стоїть на видному місці. Гості питають, що це. Я теж іноді питаю.',
+  'Прийшло з листівкою «Дякуємо, що ви з нами». Ми з ними.',
+  'Зручно, практично, незрозуміло. Рекомендую.',
+  'Тепер хочеться ще й аксесуар до нього.',
+  'Колір у житті трохи інший, ніж на фото. Кращий.',
+  'Шукали аналоги. Аналогів не знайшли.',
+  'Друзі сказали «навіщо». Тепер просять таке саме.',
+];
+// Reply threads under reviews; each inner array is one exchange.
+const THREADS = [
+  ['А для чого воно?', 'Для настрою. Працює.'],
+  ['Скільки чекали доставку?', 'Два дні. Чекати було приємно.'],
+  ['Підтверджую.'],
+  ['Дякую за відгук, замовляю.'],
+  ['Те саме. Не шкодую.'],
+  ['А колір який?', 'Як на фото, тільки живіший.'],
+  ['Чесний відгук, дякую.'],
+];
+
+// [emoji, name, price, description, review, image?]; review is a plain string or she()/he() when gendered; image is a file in img/
+const CATS = [
+  { id: 'kitchen', name: 'Кухня', items: [
+    ['🥝', 'Ложка для ківі «Ківімайстер»', 249, 'Ергономічна ложка, створена спеціально для ківі. Якщо їсти нею суп, суп гірчить.', she('Спробувала на кавуні: не підійшла. Тепер купую кавуни розміром з ківі.'), 'kiwi-spoon'],
+    ['🍌', 'Різак для банана у формі банана', 189, 'Ділить банан на 18 рівних шматочків. Криві банани — на вашу відповідальність.', 'Банан був кривий, вийшло 17 шматочків. Вісімнадцятий десь у різаку.'],
+    ['🥚', 'Яйце-таймер для яєць', 159, 'Вариться разом з яйцями і темніє, коли вони готові.', 'Яйця зварились. Таймер теж, здається, готовий.'],
+    ['🧈', 'Масляна ручка', 219, 'Наносить масло як фломастер. Тепер бутерброд можна підписати.', she('Підписала чоловікові бутерброд «твій». Працює.')],
+    ['🍝', 'Лінійка для спагеті', 99, 'Відміряє порцію на 1, 2 або 4 людини. Отвір на 6 — для оптимістів.', he('Користуюсь отвором на 4. Їм сам.')],
+    ['🧂', 'Сільничка з підтвердженням', 349, 'Перед кожною порцією солі питає: «Ви впевнені?»', he('Тепер я впевнений у кожному рішенні.')],
+    ['🧀', 'Терка для сиру з ароматом сиру', 209, 'Натирає сир і пахне сиром. Навіть коли сиру немає.', 'Сиру вдома немає, а запах є. Дуже затишно.'],
+    ['☂️', 'Парасолька для чашки', 139, 'Захищає каву від дощу на балконі.', he('На балконі дощ, кава суха. Я мокрий.')],
+    ['🎒', 'Чохол для банана', 119, 'Жорсткий корпус для банана в дорозі. Підходить більшості бананів.', 'Банан доїхав без жодної подряпини.'],
+    ['🧺', 'Набір «Ложка для ківі + ківі»', 299, 'Усе необхідне в одній коробці. Ківі пластиковий, тож прослужить довго.', 'Ложка чудова. Ківі витримав уже чотири сніданки.'],
+  ] },
+  { id: 'pets', name: 'Для улюбленців', items: [
+    ['🪨', 'Декоративний камінь «Преміум»', 399, 'Відібраний вручну камінь з сертифікатом автентичності. Пасує до будь-якого інтер’єру.', 'Камінь на місці. Сертифікат теж. Претензій немає.'],
+    ['🎩', 'Капелюх для хом’яка', 129, 'Фетровий циліндр розміром з наперсток. Хом’як може не оцінити.', she('Хом’як не оцінив. Я оцінила за нього.')],
+    ['🐟', 'Акваріумний замок з ліфтом', 459, 'Три поверхи і декоративний ліфт. Рибки, як правило, пливуть повз.', 'Рибки живуть на першому поверсі. Ліфтом не користуються.'],
+    ['🦴', 'Кістка, що грає мелодії', 179, 'Вісім мелодій на вибір собаки.', he('За тиждень я вивчив усі вісім. Пес — улюблену.')],
+    ['📦', 'Коробка для котячих коробок', 289, 'Велика коробка, в яку кладуть менші коробки, щоб кіт обрав найкращу.', 'Кіт обрав велику коробку. Менші стоять на підлозі.'],
+    ['🐦', 'Дзеркальце для папуги з підсвіткою', 239, 'Підсвічує папугу у найвигідніших ракурсах.', 'Папуга тепер довго дивиться в дзеркало перед виходом.'],
+  ] },
+  { id: 'gadgets', name: 'Гаджети', items: [
+    ['🐈', 'Підігрівач чашки «Кіт». Автономний', 319, 'Працює без USB і батарейок. Вмикається, коли сам захоче.', 'Кава тепла. Кіт теж. Чашку переставити не можна.', 'cat-mug-warmer'],
+    ['🥄', 'Вентилятор для ложки супу', 279, 'Охолоджує кожну ложку окремо. Працює від двох батарейок АА.', 'Суп холоне рівно тоді, коли треба. Батарейки — ні.'],
+    ['🔌', 'USB-хаб на один порт', 149, 'Перетворює один USB-порт на один USB-порт. Зате зі світлодіодом.', 'Світлодіод гарний.'],
+    ['⌨️', 'Клавіатура з однією клавішею Enter', 499, 'Велика, тактильна і дуже переконлива.', 'Натискаю, коли треба відправити лист з упевненістю.'],
+    ['📏', 'Розумна лінійка з Bluetooth', 389, 'Міряє 30 см і повідомляє про це в застосунку.', 'Застосунок підтвердив: 30 см.'],
+    ['🔦', 'Ліхтарик для пошуку ліхтарика', 199, 'Комплект із двох. Один завжди допоможе знайти інший.', he('Знайшов обидва. Відчуваю себе героєм.')],
+    ['📡', 'Безпровідний шнур', 199, 'Шнур без проводу. Нічого не плутається.', 'Справді нічого не плутається.'],
+    ['🔋', 'Подовжувач для подовжувача', 169, 'Коли подовжувач закороткий.', 'Тепер дістає до іншого подовжувача.'],
+    ['⏰', 'Будильник, що відкладає сам себе', 259, 'Дзвонить, сам натискає «ще 5 хвилин» і замовкає.', 'Висипаюсь уперше за роки.'],
+    ['🚲', 'Ароматизатор «Нова машина» для велосипеда', 89, 'Велосипед пахне так, ніби ви щойно забрали його з автосалону.', 'Сусіди питають, яка в мене машина.'],
+  ] },
+  { id: 'home', name: 'Дім і затишок', items: [
+    ['🛏️', 'Подушка для подушки', 269, 'Додатковий рівень м’якості для вашої подушки.', 'Подушка задоволена. Я теж.'],
+    ['🗂️', 'Органайзер для органайзерів', 339, 'Наведіть лад серед засобів наведення ладу.', 'Нарешті всі органайзери в одному місці.'],
+    ['🕯️', 'Свічка з ароматом «Понеділок»', 189, 'Нотки кави, будильника й непрочитаних листів.', 'Дуже точний аромат. Запалюю по неділях, щоб підготуватись.'],
+    ['🪴', 'Кактус з індикатором поливу', 229, 'Пластиковий, з індикатором поливу. Індикатор завжди зелений.', 'Найкраще доглянута рослина в моєму житті.'],
+    ['🧦', 'Шкарпетки-непарки, 3 шт', 149, 'Жодна не має пари. Одразу, без очікування.', she('Заощадила місяць пошуків.')],
+    ['🚪', 'Табличка на двері «Я думаю»', 119, 'Двостороння: «Я думаю» / «Я подумав».', 'Друга сторона використовується рідше.'],
+    ['👖', 'Кишеня для кишені', 99, 'Пришивається всередину кишені. Для речей, які губляться навіть у кишені.', 'Ключі тепер у кишені в кишені. Шукаю їх у двох місцях.'],
+    ['✨', 'Невидимі стікери, 50 шт', 79, 'На фото всі 50.', she('Наклеїла всі. Виглядає стримано.')],
+    ['🧲', 'Магніт «Ви відкрили холодильник»', 59, 'Нагадує, що ви відкрили холодильник.', 'Відкриваю холодильник — магніт не бреше.'],
+    ['🥿', 'Тапки з GPS', 449, 'Більше жодних пошуків другого тапка під диваном.', 'Тапок під диваном. GPS підтвердив.'],
+    ['🎓', 'Курс «Розпакування коробок для початківців»', 599, '12 уроків, сертифікат і коробка для практики.', he('Після третього уроку розпакував коробку з курсом.')],
+  ] },
+  { id: 'season', name: 'Сезонне', items: [
+    ['🦌', 'Ложка для ківі з оленями', 279, 'Та сама ложка для ківі, але святкова.', 'Ківі смакує святковіше. Можливо, це самонавіювання.'],
+    ['🎄', 'Ялинкова іграшка у формі ялинки', 99, 'Маленька ялинка для великої ялинки.', she('Повісила. Тепер думаю, чи потрібна їй своя іграшка.')],
+    ['☃️', 'Сніговик для підвіконня', 169, 'Збірний сніговик без снігу. Не тане.', 'Стоїть третій рік. Не тане, як і обіцяли.'],
+    ['🧣', 'Шарф для чашки', 129, 'В’язаний шарф, щоб чашці не було холодно.', 'Чашці тепло. Чай, на жаль, усе одно холоне.'],
+    ['🎁', 'Подарункова коробка для коробки', 159, 'Щоб подарункова коробка теж почувалась подарунком.', she('Подарувала коробку в коробці. Реакція незабутня.')],
+    ['❄️', 'Сніжинка в рамці', 259, 'Кожна унікальна, як і належить сніжинкам.', she('Моя унікальна. Перевірила під лупою.')],
+  ] },
+  { id: 'secret', name: 'Для своїх', hidden: true, items: [
+    ['🥄', 'Ложка для ківі, лімітована серія', 999, 'Нумерована. Позолочена. Для ківі.', 'Тримаю у сейфі. Ківі їм звичайною.'],
+    ['🛌', 'Подушка для подушки для подушки', 799, 'Третій рівень м’якості. Тільки для своїх.', 'Тепер у мене три подушки і одна голова.'],
+  ] },
+];
+
+const PRODUCTS = [];
+CATS.forEach(c => {
+  c.pids = [];
+  shuffle(c.items.map((_, i) => i)).forEach((ii, pos) => {
+    const [emoji, name, price, desc, review, img] = c.items[ii];
+    const own = typeof review === 'string' ? { text: review } : review;
+    const texts = shuffle(GENERIC).slice(0, ri(1, 3));
+    const reviews = [{ g: own.g, text: own.text }].concat(texts.map(text => ({ text })))
+      .map(r => ({ who: author(r.g).name, stars: ri(3, 5), text: r.text, replies: [] }));
+    reviews.forEach(r => { if (rng() < 0.25) r.replies = pickOne(THREADS).map(text => ({ who: author().name, text })); });
+    const id = PRODUCTS.length;
+    PRODUCTS.push({ id, cat: c.id, pos, emoji, name, price, desc, img, hue: ri(0, 359), reviews: shuffle(reviews) });
+    c.pids.push(id);
+  });
+});
+// Hide a review among the others instead of always appending it last.
+function insertReview(p, r) {
+  p.reviews.splice(ri(0, p.reviews.length), 0, Object.assign({ replies: [] }, r));
+}
+const catById = id => CATS.find(c => c.id === id);
+const catOf = p => catById(p.cat);
+const pageOf = p => Math.floor(p.pos / PAGE);
+const SHOP = PRODUCTS.filter(p => p.cat !== 'secret');
+
+// Daily mix: flash always, plus 5 of the other 9 kinds; repeatable kinds fill up to TOTAL.
+const KINDS = ['stock', 'glitch', 'promo', 'trio', 'triple', 'dutch', 'abandon', 'happy', 'cartdeal', 'secret'];
+const REPEATABLE = { flash: 5, stock: 2, glitch: 2, promo: 2, dutch: 2 };
+const counts = { flash: 1 };
+shuffle(KINDS).slice(0, 5).forEach(k => { counts[k] = 1; });
+while (Object.values(counts).reduce((a, b) => a + b, 0) < TOTAL) {
+  const k = pickOne(Object.keys(counts).filter(x => REPEATABLE[x] && counts[x] < REPEATABLE[x]));
+  counts[k] += 1;
+}
+
+const used = new Set(PRODUCTS.filter(p => p.cat === 'secret').map(p => p.id));
+function pick(filter) {
+  const p = pickOne(SHOP.filter(q => !used.has(q.id) && filter(q)));
+  used.add(p.id);
+  return p;
+}
+const D = [];
+const add = d => { d.id = D.length; D.push(d); return d; };
+for (let i = 0; i < counts.flash; i++) add({ type: 'flash', pid: pick(() => true).id, pct: ri(3, 7) * 10, start: ri(10, 300), dur: ri(25, 45) });
+shuffle(CATS.filter(c => !c.hidden)).slice(0, counts.stock || 0).forEach(c => {
+  add({ type: 'stock', pid: pick(q => q.cat === c.id && q.pos >= PAGE).id, pct: 50, drops: [ri(50, 140), ri(141, 220), ri(221, 300)] });
+});
+[9, 19].slice(0, counts.glitch || 0).forEach(fixed => {
+  const p = pick(() => true);
+  add({ type: 'glitch', pid: p.id, fixed, off: ri(0, 34) });
+  insertReview(p, { who: author('m').name, stars: 2, text: `Учора ціна на кілька секунд впала до ${fixed} ₴. Поки я думав, повернулась назад.` });
+});
+const CODES = shuffle(['KOTYK', 'LOZHKA', 'SHARF', 'KAKTUS', 'OLENYK', 'HOMA']);
+for (let i = 0; i < (counts.promo || 0); i++) {
+  const target = pick(() => true);
+  const host = pickOne(SHOP.filter(p => p.cat !== target.cat));
+  const pct = ri(3, 6) * 10;
+  const code = CODES[i] + pct;
+  add({ type: 'promo', pid: target.id, pct, code, start: ri(30, 220), dur: 120, host: host.id });
+  const tip = `Порада: код ${code} дає −${pct}% на «${target.name}». Кажуть, діє недовго.`;
+  if (rng() < 0.5) host.reviews[ri(0, host.reviews.length - 1)].replies.push({ who: author().name, text: tip });
+  else insertReview(host, { who: author().name, stars: 5, text: tip });
+}
+// Someone else's referral codes: they look like deals but give the player nothing.
+const DECOYS = [];
+shuffle(PEOPLE).slice(0, ri(2, 3)).forEach(who => {
+  const code = who.lat + ri(5, 15);
+  DECOYS.push({ code, who: who.name });
+  const host = pickOne(SHOP);
+  const text = `Ділюся кодом ${code}: −${ri(10, 25)}% на все! (це реферальний)`;
+  if (rng() < 0.5) host.reviews[ri(0, host.reviews.length - 1)].replies.push({ who: who.name, text });
+  else insertReview(host, { who: who.name, stars: 5, text });
+});
+if (counts.trio) {
+  const pids = shuffle(CATS.filter(c => !c.hidden)).slice(0, 3).map(c => pick(q => q.cat === c.id).id);
+  add({ type: 'trio', pids, start: ri(40, 220), dur: 120 });
+}
+if (counts.triple) add({ type: 'triple', pid: pick(() => true).id, start: ri(40, 220), dur: 120 });
+for (let i = 0; i < (counts.dutch || 0); i++) {
+  const start = ri(20, 180);
+  add({ type: 'dutch', pid: pick(() => true).id, start, soldAt: start + ri(60, 150) });
+}
+if (counts.abandon) add({ type: 'abandon', pid: null, start: null, dur: 30, pct: 25 });
+if (counts.happy) add({ type: 'happy', cat: pickOne(CATS.filter(c => !c.hidden)).id, pct: 30, start: ri(60, 300), dur: 30 });
+if (counts.cartdeal) add({ type: 'cartdeal', pct: 20, start: ri(60, 280), dur: 60 });
+if (counts.secret) add({ type: 'secret', pids: catById('secret').pids, pct: 60 });
+
+const FAKES = [];
+for (let i = 0, n = ri(0, 2); i < n; i++) {
+  const p = pick(() => true);
+  p.fakeOld = Math.ceil(p.price * ri(4, 5) / 100) * 100 - 1;
+  insertReview(p, { who: author().name, stars: 3, text: 'Ціна така сама, як і місяць тому. Але тепер з бейджем.' });
+  FAKES.push(p.id);
+}
+
+const byType = type => D.find(d => d.type === type);
+function discOf(pid) {
+  return D.find(d => d.pid === pid || (d.pids && d.pids.includes(pid)));
+}
+const stockLeft = (d, t) => 3 - d.drops.filter(x => x <= t).length;
+const within = (d, t) => d.start !== null && t >= d.start && t < d.start + d.dur;
+const dutchPct = (d, t) => Math.min(80, 5 * (Math.floor((t - d.start) / 10) + 1));
+const pctPrice = (p, pct) => Math.round(p.price * (100 - pct) / 100);
+const isSold = (p, t) => { const d = discOf(p.id); return !!d && d.type === 'dutch' && t >= d.soldAt; };
+
+// What this product offers at time t on this spot: {d, price, label} for a real deal, {fake} for a trap, or null.
+function offerFor(p, t, where) {
+  if (S.phase !== 'run') return null;
+  if (p.fakeOld) return { fake: true, price: p.price, label: `−${Math.round(100 - p.price * 100 / p.fakeOld)}%` };
+  const d = discOf(p.id);
+  if (d) {
+    if (d.type === 'flash' && within(d, t)) return { d, price: pctPrice(p, d.pct), label: `−${d.pct}% · ${mmss(d.start + d.dur - t)}` };
+    if (d.type === 'stock' && stockLeft(d, t) > 0) return { d, price: pctPrice(p, d.pct), label: `−50% · залишилось ${stockLeft(d, t)}` };
+    if (d.type === 'glitch' && where === 'modal' && t >= 20 && (t + d.off) % 35 < 6) return { d, price: d.fixed, label: 'збій ціни' };
+    if (d.type === 'dutch' && t >= d.start && t < d.soldAt) return { d, price: pctPrice(p, dutchPct(d, t)), label: `−${dutchPct(d, t)}% · ціна падає` };
+    if (d.type === 'abandon' && within(d, t)) return { d, price: pctPrice(p, d.pct), label: `−${d.pct}% · ${mmss(d.start + d.dur - t)}` };
+    if (d.type === 'secret') return { d, price: pctPrice(p, d.pct), label: `−${d.pct}% для своїх` };
+  }
+  const h = byType('happy');
+  if (h && within(h, t) && p.cat === h.cat && !used.has(p.id)) return { d: h, price: pctPrice(p, h.pct), label: `−${h.pct}% · ${mmss(h.start + h.dur - t)}` };
+  return null;
+}
+// One unit per product may take a given discount; further units cost full price.
+function offerNow(p, t, where) {
+  const offer = offerFor(p, t, where);
+  if (offer && !offer.fake && S.cart.some(i => i.pid === p.id && i.did === offer.d.id)) return null;
+  return offer;
+}
+
+const fmt = n => n.toLocaleString('uk-UA') + ' ₴';
+const mmss = s => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 60)}:${pad(s % 60)}`; };
+const $ = id => document.getElementById(id);
+function setHTML(el, html) { if (el._h !== html) { el.innerHTML = html; el._h = html; } }
+
+const S = { phase: 'start', startAt: 0, endT: 0, cat: CATS[0].id, page: 0, cart: [], openPid: null, practice: false, abandon: null };
+const elapsed = () => (S.phase === 'run' ? Math.min(RUN, (Date.now() - S.startAt) / 1000) : S.endT);
+const inCart = pid => S.cart.find(i => i.pid === pid);
+const unitsOf = pid => S.cart.filter(i => i.pid === pid);
+const freeUnits = pid => S.cart.filter(i => i.pid === pid && i.did === null);
+const claimedUnit = pid => S.cart.find(i => i.pid === pid && i.did !== null);
+const claimedIds = () => new Set(S.cart.filter(i => i.did !== null).map(i => i.did));
+const caught = () => [...new Set(S.cart.filter(i => i.fake).map(i => i.pid))];
+const savedSum = () => S.cart.reduce((s, i) => s + PRODUCTS[i.pid].price - i.price, 0);
+const cartSum = () => S.cart.reduce((s, i) => s + i.price, 0);
+
+function applyAbandon(a) {
+  S.abandon = a;
+  const d = byType('abandon');
+  if (d && a) { d.pid = a.pid; d.start = a.start; }
+}
+
+const STORE_KEY = 'znyzhkomat:v4:' + dateKey;
+function load() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; } }
+function save(patch) { try { localStorage.setItem(STORE_KEY, JSON.stringify(Object.assign(load(), patch))); } catch (e) { /* storage unavailable */ } }
+const saveRun = () => save({ run: { startAt: S.startAt, cart: S.cart, practice: S.practice, abandon: S.abandon } });
+
+// Anonymous event counter; a no-op where the analytics script is absent.
+function track(path) {
+  try { if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path, title: path, event: true }); } catch (e) { /* analytics unavailable */ }
+}
+function recordDay() {
+  let days = [];
+  try { days = JSON.parse(localStorage.getItem('znyzhkomat:days')) || []; } catch (e) { /* storage unavailable */ }
+  if (!days.includes(dateKey)) days.push(dateKey);
+  try { localStorage.setItem('znyzhkomat:days', JSON.stringify(days)); } catch (e) { /* storage unavailable */ }
+  return days.length;
+}
+
+let toastTimer;
+function toast(text, kind) {
+  const el = $('toast');
+  el.textContent = text;
+  el.className = 'toast' + (kind ? ' ' + kind : '');
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 1800);
+}
+
+function renderTabs() {
+  $('tabs').innerHTML = CATS.filter(c => !c.hidden).map(c => `<button class="tab" type="button" data-cat="${c.id}" aria-current="${c.id === S.cat}">${c.name}</button>`).join('');
+}
+function renderView() {
+  const c = catById(S.cat);
+  $('catTitle').textContent = c.name;
+  const pages = Math.ceil(c.pids.length / PAGE);
+  let pager = '';
+  if (pages > 1) {
+    pager = '<span>Сторінка</span>';
+    for (let i = 0; i < pages; i++) pager += `<button type="button" data-page="${i}" aria-current="${i === S.page}">${i + 1}</button>`;
+  }
+  $('pager').innerHTML = pager;
+  const pids = c.pids.slice(S.page * PAGE, S.page * PAGE + PAGE);
+  $('grid').innerHTML = pids.map(pid => {
+    const p = PRODUCTS[pid];
+    return `<article class="card" data-pid="${pid}">
+      <div class="tile" style="--h:${p.hue}">${visual(p)}<span class="badge-slot"></span></div>
+      <div class="card-body"><h3>${p.name}</h3><div class="price-slot"></div>
+      <button class="add" type="button" data-add="${pid}">В кошик</button></div></article>`;
+  }).join('');
+  renderTabs();
+  refresh();
+}
+
+const visual = p => (p.img ? `<img class="pic" src="img/${p.img}.webp" alt="">` : `<span class="emo">${p.emoji}</span>`);
+
+function priceHTML(p, offer, mine) {
+  if (mine && !offer) return `<div class="price mine"><b>${fmt(mine.price)}</b><s>${fmt(p.price)}</s></div>`;
+  if (offer && offer.fake) return `<div class="price sale"><b>${fmt(p.price)}</b><s>${fmt(p.fakeOld)}</s></div>`;
+  if (offer) return `<div class="price sale"><b>${fmt(offer.price)}</b><s>${fmt(p.price)}</s></div>`;
+  return `<div class="price"><b>${fmt(p.price)}</b></div>`;
+}
+function badgeHTML(p, offer, mine, t) {
+  let html = '';
+  if (offer) html = `<span class="badge">${offer.label}</span>`;
+  else if (mine) html = '<span class="badge mine">твоя знижка</span>';
+  if (S.phase !== 'run') return html;
+  const trio = byType('trio');
+  if (trio && within(trio, t) && trio.pids.includes(p.id) && !claimedIds().has(trio.id)) html += '<span class="sticker">2+1</span>';
+  const triple = byType('triple');
+  if (triple && within(triple, t) && triple.pid === p.id && !claimedIds().has(triple.id)) {
+    html += `<span class="badge">3 за ціною 2 · ${mmss(triple.start + triple.dur - t)}</span>`;
+  }
+  return html;
+}
+function buttonState(btn, p, t) {
+  const n = unitsOf(p.id).length;
+  btn.disabled = S.phase !== 'run' || isSold(p, t);
+  if (S.phase !== 'run') btn.textContent = 'Магазин зачинено';
+  else if (isSold(p, t)) btn.textContent = 'Розкупили';
+  else if (n) btn.textContent = `+1 · у кошику ${n}`;
+  else btn.textContent = 'В кошик';
+}
+
+function renderBanners(t) {
+  let html = '';
+  if (S.phase === 'run') {
+    const cd = byType('cartdeal');
+    if (cd && within(cd, t) && !claimedIds().has(cd.id)) {
+      html += `<div class="banner"><span>−${cd.pct}% на весь кошик від ${fmt(DEAL_MIN)} · <span class="mono">${mmss(cd.start + cd.dur - t)}</span></span><span>у кошику ${fmt(cartSum())}</span></div>`;
+    }
+    const ab = byType('abandon');
+    if (ab && within(ab, t) && !inCart(ab.pid)) {
+      html += `<div class="banner"><span>«${PRODUCTS[ab.pid].name}» досі чекає на вас: −${ab.pct}% · <span class="mono">${mmss(ab.start + ab.dur - t)}</span></span><button type="button" data-open="${ab.pid}">Відкрити</button></div>`;
+    }
+  }
+  setHTML($('banners'), html);
+}
+
+function refresh() {
+  const t = elapsed();
+  const left = RUN - t;
+  $('timer').textContent = S.phase === 'start' ? mmss(RUN) : mmss(left);
+  $('timer').classList.toggle('urgent', S.phase === 'run' && left <= 30);
+  $('score').textContent = `урвано ${claimedIds().size}/${D.length}`;
+  $('cartCount').textContent = S.cart.length;
+  const h = byType('happy');
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.classList.toggle('blink', !!h && S.phase === 'run' && within(h, t) && tab.dataset.cat === h.cat);
+  });
+  renderBanners(t);
+  document.querySelectorAll('#grid .card').forEach(card => {
+    const p = PRODUCTS[+card.dataset.pid];
+    const mine = claimedUnit(p.id);
+    const offer = offerNow(p, t, 'card');
+    setHTML(card.querySelector('.badge-slot'), badgeHTML(p, offer, mine, t));
+    setHTML(card.querySelector('.price-slot'), priceHTML(p, offer, mine));
+    buttonState(card.querySelector('.add'), p, t);
+    card.classList.toggle('hot', !!offer);
+    card.classList.toggle('sold', isSold(p, t));
+  });
+  if (S.openPid !== null) {
+    const p = PRODUCTS[S.openPid];
+    const mine = claimedUnit(p.id);
+    const offer = offerNow(p, t, 'modal');
+    setHTML($('pPrice'), badgeHTML(p, offer, mine, t) + priceHTML(p, offer, mine));
+    buttonState($('pAdd'), p, t);
+  }
+  if (S.phase === 'run') checkCartDeal();
+}
+
+function openProduct(pid) {
+  const p = PRODUCTS[pid];
+  S.openPid = pid;
+  $('pTile').style.setProperty('--h', p.hue);
+  $('pTile').innerHTML = p.img ? `<img class="pic-bg" src="img/${p.img}.webp" alt="">${visual(p)}` : visual(p);
+  $('pCat').textContent = catOf(p).name;
+  $('pName').textContent = p.name;
+  $('pDesc').textContent = p.desc;
+  $('pPrice')._h = null;
+  $('pReviews').innerHTML = p.reviews.map(r => {
+    const stars = '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars);
+    const replies = r.replies.map(x => `<li><div class="who">${x.who}</div><p>${x.text}</p></li>`).join('');
+    const thread = replies ? `<ul class="replies">${replies}</ul>` : '';
+    return `<li><div class="who">${r.who}<span class="stars">${stars}</span></div><p>${r.text}</p>${thread}</li>`;
+  }).join('');
+  $('productOv').hidden = false;
+  refresh();
+}
+function closeProduct() {
+  const pid = S.openPid;
+  $('productOv').hidden = true;
+  S.openPid = null;
+  if (pid === null || S.phase !== 'run') return;
+  const t = elapsed();
+  if (byType('abandon') && !S.abandon && !inCart(pid) && !used.has(pid) && !PRODUCTS[pid].fakeOld && t < RUN - 80) {
+    applyAbandon({ pid, start: Math.round(t + 40) });
+    saveRun();
+  }
+}
+
+function addToCart(pid, from) {
+  const p = PRODUCTS[pid];
+  const t = elapsed();
+  if (S.phase !== 'run' || isSold(p, t)) return;
+  const offer = offerNow(p, t, from);
+  const item = { pid, did: null, price: p.price };
+  if (offer && offer.fake) {
+    item.fake = true;
+    toast('Додано в кошик');
+  } else if (offer) {
+    item.did = offer.d.id;
+    item.price = offer.price;
+    toast(`Урвав! −${fmt(p.price - item.price)}`, 'win');
+  } else {
+    toast('Додано в кошик');
+  }
+  S.cart.push(item);
+  checkTrio(t);
+  checkTriple(t);
+  checkCartDeal();
+  saveRun(); renderCart(); refresh();
+}
+function checkTrio(t) {
+  const d = byType('trio');
+  if (!d || !within(d, t) || claimedIds().has(d.id)) return;
+  const items = d.pids.map(pid => freeUnits(pid)[0]);
+  if (items.some(i => !i)) return;
+  items.forEach(i => { i.did = d.id; });
+  const cheapest = items.reduce((a, b) => (a.price <= b.price ? a : b));
+  cheapest.price = 0;
+  toast('Третій у подарунок!', 'win');
+}
+// Three free units of the same product: all three get locked, the last one is free.
+function checkTriple(t) {
+  const d = byType('triple');
+  if (!d || !within(d, t) || claimedIds().has(d.id)) return;
+  const items = freeUnits(d.pid).slice(0, 3);
+  if (items.length < 3) return;
+  items.forEach(i => { i.did = d.id; });
+  items[2].price = 0;
+  toast('Третій такий самий у подарунок!', 'win');
+}
+function checkCartDeal() {
+  const d = byType('cartdeal');
+  const t = elapsed();
+  if (!d || !within(d, t) || claimedIds().has(d.id) || cartSum() < DEAL_MIN) return;
+  const free = S.cart.filter(i => i.did === null);
+  if (!free.length) return;
+  free.forEach(i => { i.did = d.id; i.price = Math.round(i.price * (100 - d.pct) / 100); });
+  toast(`−${d.pct}% на кошик!`, 'win');
+  saveRun(); renderCart();
+}
+function removeFromCart(pid) {
+  const unit = freeUnits(pid).pop();
+  if (!unit) return;
+  S.cart.splice(S.cart.lastIndexOf(unit), 1);
+  saveRun(); renderCart(); refresh();
+}
+function promoMsg(text, kind) { const el = $('promoMsg'); el.textContent = text; el.className = 'promo-msg' + (kind ? ' ' + kind : ''); }
+function applyCode(raw) {
+  if (S.phase !== 'run') return promoMsg('Магазин зачинено', 'bad');
+  const code = raw.trim().toUpperCase();
+  if (!code) return promoMsg('Введи код', 'bad');
+  const decoy = DECOYS.find(x => x.code === code);
+  if (decoy) return promoMsg(`Це реферальний код. Бонус отримає ${decoy.who}, а тобі знижки немає.`, 'bad');
+  const d = D.find(x => x.type === 'promo' && x.code === code);
+  if (!d) return promoMsg('Такого коду немає', 'bad');
+  const t = elapsed();
+  if (t < d.start) return promoMsg('Код ще не діє. Спробуй трохи пізніше.', 'bad');
+  if (t >= d.start + d.dur) return promoMsg('Код уже не діє.', 'bad');
+  if (!inCart(d.pid)) return promoMsg(`Код діє на «${PRODUCTS[d.pid].name}». Спершу додай цей товар у кошик.`, 'bad');
+  if (claimedIds().has(d.id)) return promoMsg('Код уже застосовано');
+  const item = freeUnits(d.pid)[0];
+  if (!item) return promoMsg('На цей товар уже є знижка', 'bad');
+  item.did = d.id;
+  item.price = pctPrice(PRODUCTS[d.pid], d.pct);
+  promoMsg(`Код застосовано: −${d.pct}%`, 'good');
+  toast(`Урвав! −${fmt(PRODUCTS[d.pid].price - item.price)}`, 'win');
+  saveRun(); renderCart(); refresh();
+}
+
+function renderCart() {
+  if (!S.cart.length) {
+    $('cartList').innerHTML = '<li class="empty">Кошик порожній</li>';
+  } else {
+    const pids = [...new Set(S.cart.map(i => i.pid))];
+    $('cartList').innerHTML = pids.map(pid => {
+      const p = PRODUCTS[pid];
+      const units = unitsOf(pid);
+      const sum = units.reduce((s, i) => s + i.price, 0);
+      const full = p.price * units.length;
+      const qty = units.length > 1 ? ` × ${units.length}` : '';
+      const note = claimedUnit(pid) ? '<small>знижка твоя</small>' : '';
+      const old = sum !== full ? `<s>${fmt(full)}</s>` : '';
+      const rm = S.phase === 'run' && freeUnits(pid).length ? `<button class="rm" type="button" data-rm="${pid}">прибрати 1</button>` : '';
+      return `<li><span class="ce">${p.emoji}</span><span class="cn">${p.name}${qty}${note}</span><span class="cp">${old}${fmt(sum)}<br>${rm}</span></li>`;
+    }).join('');
+  }
+  const full = S.cart.reduce((s, i) => s + PRODUCTS[i.pid].price, 0);
+  $('totals').innerHTML = `<div><span>Без знижок</span><span class="mono">${fmt(full)}</span></div>
+    <div><span>До сплати (уявно)</span><span class="mono">${fmt(cartSum())}</span></div>
+    <div class="saved"><span>Зекономлено</span><span class="mono">${fmt(full - cartSum())}</span></div>`;
+  $('checkout').hidden = S.phase !== 'run';
+}
+
+function start(practice) {
+  S.phase = 'run';
+  S.startAt = Date.now();
+  S.cart = [];
+  S.practice = practice;
+  S.cat = CATS[0].id;
+  S.page = 0;
+  applyAbandon(null);
+  const ab = byType('abandon');
+  if (ab) { ab.pid = null; ab.start = null; }
+  $('startOv').hidden = true;
+  $('endOv').hidden = true;
+  promoMsg('');
+  saveRun(); renderCart(); renderView();
+  track(practice ? 'run-start-practice' : 'run-start');
+}
+function finish() {
+  if (S.phase !== 'run') return;
+  S.endT = elapsed();
+  S.phase = 'end';
+  const stored = load();
+  if (!S.practice && !stored.result) {
+    save({ run: null, result: { cart: S.cart, endT: S.endT, abandon: S.abandon } });
+    track(`run-done-day-${Math.min(recordDay(), 10)}`);
+  } else {
+    save({ run: null });
+  }
+  closeProduct(); $('drawer').hidden = true; renderCart(); refresh(); showEnd();
+}
+
+function where(p) { return `${catOf(p).name}, стор. ${pageOf(p) + 1}`; }
+function describe(d) {
+  const p = d.pid !== null && d.pid !== undefined ? PRODUCTS[d.pid] : null;
+  if (d.type === 'flash') return `Блискавична −${d.pct}% на «${p.name}» (${where(p)}), з ${mmss(d.start)} по ${mmss(d.start + d.dur)}`;
+  if (d.type === 'stock') return `−50% на «${p.name}» (${where(p)}), поки не розкупили (до ${mmss(d.drops[2])})`;
+  if (d.type === 'glitch') return `Ціна «${p.name}» (${where(p)}) кожні 35 с на мить падала до ${d.fixed} ₴, видно лише на сторінці товару`;
+  if (d.type === 'promo') return `Код ${d.code} у відгуку на «${PRODUCTS[d.host].name}»: −${d.pct}% на «${p.name}», з ${mmss(d.start)} по ${mmss(d.start + d.dur)}`;
+  if (d.type === 'trio') return `«2+1» на «${d.pids.map(id => PRODUCTS[id].name).join('», «')}» з ${mmss(d.start)} по ${mmss(d.start + d.dur)}: найдешевший безкоштовно`;
+  if (d.type === 'triple') return `«3 за ціною 2» на «${p.name}» (${where(p)}) з ${mmss(d.start)} по ${mmss(d.start + d.dur)}: третій такий самий безкоштовно`;
+  if (d.type === 'dutch') return `Ціна «${p.name}» (${where(p)}) падала на 5% кожні 10 с з ${mmss(d.start)}, розкупили о ${mmss(d.soldAt)}`;
+  if (d.type === 'abandon') {
+    if (!p) return 'Товар, що чекає: відкрий товар і піди, не купивши, і через 40 с він наздожене зі знижкою −25%';
+    return `«${p.name}» чекав на тебе з −25% з ${mmss(d.start)} по ${mmss(d.start + d.dur)}`;
+  }
+  if (d.type === 'happy') return `Щаслива хвилина в «${catById(d.cat).name}»: −30% на все з ${mmss(d.start)} по ${mmss(d.start + d.dur)}, вкладка блимала`;
+  if (d.type === 'cartdeal') return `−20% на весь кошик від ${fmt(DEAL_MIN)} з ${mmss(d.start)} по ${mmss(d.start + d.dur)}`;
+  return 'Секретний розпродаж «Для своїх»: п’ять разів клацнути логотип';
+}
+function squares() {
+  const got = claimedIds();
+  return D.map(d => (got.has(d.id) ? '🟩' : '⬜')).join('') + caught().map(() => '🟥').join('');
+}
+function shareText() {
+  const lines = [`Знижкомат ${dateLabel}${S.practice ? ' (тренування)' : ''}`, `${squares()} ${claimedIds().size}/${D.length}`];
+  if (caught().length) lines.push(`Попався на фальшиву знижку: ${caught().length}`);
+  lines.push(`Зекономив ${fmt(savedSum())} за ${mmss(S.endT)}`);
+  return lines.join('\n');
+}
+function showEnd() {
+  const got = claimedIds();
+  const caughtIds = new Set(caught());
+  $('endEyebrow').textContent = S.practice ? `${dateLabel} · тренування, не в залік` : `${dateLabel} · сьогоднішній забіг`;
+  $('endScore').textContent = `${got.size} з ${D.length}`;
+  $('endSquares').textContent = squares();
+  $('endSaved').textContent = `Зекономлено ${fmt(savedSum())} за ${mmss(S.endT)}. Новий магазин відкриється завтра.`;
+  $('shareText').textContent = shareText();
+  let html = D.map(d => `<li class="${got.has(d.id) ? '' : 'miss'}"><span>${got.has(d.id) ? '✓' : '✗'}</span><span>${describe(d)}</span></li>`).join('');
+  html += FAKES.map(pid => {
+    const p = PRODUCTS[pid];
+    const hit = caughtIds.has(pid);
+    return `<li class="${hit ? 'caught' : 'miss'}"><span>${hit ? '🟥' : '·'}</span><span>Фальшива знижка на «${p.name}»: «було ${fmt(p.fakeOld)}», а коштує завжди ${fmt(p.price)}${hit ? '. Ти попався' : ''}</span></li>`;
+  }).join('');
+  if (!FAKES.length) html += '<li class="miss"><span>·</span><span>Фальшивих знижок сьогодні не було</span></li>';
+  $('whereList').innerHTML = html;
+  $('endOv').hidden = false;
+}
+
+let logoClicks = [];
+$('brand').addEventListener('click', () => {
+  const t = Date.now();
+  logoClicks = logoClicks.filter(x => t - x < 2500).concat(t);
+  if (logoClicks.length >= 5 && byType('secret') && S.phase === 'run') {
+    logoClicks = [];
+    S.cat = 'secret'; S.page = 0;
+    renderView();
+    toast('Ви знайшли розпродаж для своїх');
+  }
+});
+document.addEventListener('click', e => {
+  const t = e.target;
+  const addBtn = t.closest('[data-add]');
+  if (addBtn) { addToCart(+addBtn.dataset.add, 'card'); return; }
+  const open = t.closest('[data-open]');
+  if (open) { openProduct(+open.dataset.open); return; }
+  const card = t.closest('.card');
+  if (card) { openProduct(+card.dataset.pid); return; }
+  const tab = t.closest('[data-cat]');
+  if (tab) { S.cat = tab.dataset.cat; S.page = 0; renderView(); return; }
+  const pg = t.closest('[data-page]');
+  if (pg) { S.page = +pg.dataset.page; renderView(); return; }
+  const rm = t.closest('[data-rm]');
+  if (rm) { removeFromCart(+rm.dataset.rm); return; }
+  if (t.closest('[data-close]') || t.id === 'productOv') closeProduct();
+});
+$('pAdd').addEventListener('click', () => { if (S.openPid !== null) addToCart(S.openPid, 'modal'); });
+$('cartBtn').addEventListener('click', () => { $('drawer').hidden = false; });
+$('cartClose').addEventListener('click', () => { $('drawer').hidden = true; });
+$('promoForm').addEventListener('submit', e => { e.preventDefault(); applyCode($('promo').value); });
+$('startBtn').addEventListener('click', () => start(false));
+$('practiceBtn').addEventListener('click', () => start(true));
+$('lookBtn').addEventListener('click', () => { $('endOv').hidden = true; });
+let confirmTimer;
+$('checkout').addEventListener('click', () => {
+  const btn = $('checkout');
+  if (btn.dataset.armed) { finish(); return; }
+  btn.dataset.armed = '1';
+  btn.textContent = 'Точно? Таймер зупиниться';
+  clearTimeout(confirmTimer);
+  confirmTimer = setTimeout(() => { delete btn.dataset.armed; btn.textContent = 'Оформити й завершити'; }, 3000);
+});
+$('copyBtn').addEventListener('click', () => {
+  track('share-copy');
+  const done = () => toast('Скопійовано');
+  const fallback = () => {
+    const range = document.createRange();
+    range.selectNodeContents($('shareText'));
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    toast('Текст виділено, скопіюй вручну');
+  };
+  try { navigator.clipboard.writeText(shareText()).then(done, fallback); } catch (e) { fallback(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (!$('productOv').hidden) closeProduct();
+  else if (!$('drawer').hidden) $('drawer').hidden = true;
+});
+
+$('dateLabel').textContent = dateLabel;
+$('startEyebrow').textContent = `Забіг ${dateLabel}`;
+$('startTitle').textContent = `Сьогодні в магазині сховано ${D.length} знижок`;
+const stored = load();
+if (stored.run && Date.now() - stored.run.startAt < RUN * 1000) {
+  S.phase = 'run';
+  S.startAt = stored.run.startAt;
+  S.cart = stored.run.cart || [];
+  S.practice = !!stored.run.practice;
+  applyAbandon(stored.run.abandon || null);
+  $('startOv').hidden = true;
+} else if (stored.result) {
+  S.phase = 'end';
+  S.cart = stored.result.cart || [];
+  S.endT = stored.result.endT || RUN;
+  applyAbandon(stored.result.abandon || null);
+  $('startOv').hidden = true;
+  showEnd();
+}
+renderCart();
+renderView();
+setInterval(() => {
+  if (S.phase === 'run' && elapsed() >= RUN) finish();
+  refresh();
+}, 250);
+</script>
+
+</body>
+</html>
