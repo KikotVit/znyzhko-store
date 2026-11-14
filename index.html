@@ -460,7 +460,10 @@ function pick(filter) {
 }
 const D = [];
 const add = d => { d.id = D.length; D.push(d); return d; };
-for (let i = 0; i < counts.flash; i++) add({ type: 'flash', pid: pick(() => true).id, pct: ri(3, 7) * 10, start: ri(10, 300), dur: ri(25, 45) });
+// The first flash lands in the last minute so the run never ends empty; start stays in place to keep the rng order.
+for (let i = 0; i < counts.flash; i++) {
+  add({ type: 'flash', pid: pick(() => true).id, pct: ri(3, 7) * 10, start: i === 0 ? ri(290, 315) : ri(10, 300), dur: ri(25, 45) });
+}
 shuffle(CATS.filter(c => !c.hidden)).slice(0, counts.stock || 0).forEach(c => {
   add({ type: 'stock', pid: pick(q => q.cat === c.id && q.pos >= PAGE).id, pct: 50, drops: [ri(50, 140), ri(141, 220), ri(221, 300)] });
 });
@@ -891,7 +894,7 @@ function squares() {
 function shareText() {
   const lines = [`Знижкомат ${dateLabel}${S.practice ? ' (тренування)' : ''}`, `${squares()} ${claimedIds().size}/${D.length}`];
   if (caught().length) lines.push(`Попався на фальшиву знижку: ${caught().length}`);
-  lines.push(`Зекономив ${fmt(savedSum())} за ${mmss(S.endT)}`);
+  lines.push(`Зекономив ${fmt(savedSum())}`);
   return lines.join('\n');
 }
 function showEnd() {
@@ -900,7 +903,7 @@ function showEnd() {
   $('endEyebrow').textContent = S.practice ? `${dateLabel} · тренування, не в залік` : `${dateLabel} · сьогоднішній забіг`;
   $('endScore').textContent = `${got.size} з ${D.length}`;
   $('endSquares').textContent = squares();
-  $('endSaved').textContent = `Зекономлено ${fmt(savedSum())} за ${mmss(S.endT)}. Новий магазин відкриється завтра.`;
+  $('endSaved').textContent = `Зекономлено ${fmt(savedSum())}. Новий магазин відкриється завтра.`;
   $('shareText').textContent = shareText();
   let html = D.map(d => `<li class="${got.has(d.id) ? '' : 'miss'}"><span>${got.has(d.id) ? '✓' : '✗'}</span><span>${describe(d)}</span></li>`).join('');
   html += FAKES.map(pid => {
